@@ -1,0 +1,763 @@
+## VPCs
+
+Parameters:
+  KeyName:
+    Description: EC2 KeyPair
+    Type: AWS::EC2::KeyPair::KeyName
+    ConstraintDescription: EC2 KeyPair
+  LatestAmiId:
+    Description: EC2 AMI 
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+    AllowedValues:
+      - /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+
+##Seoul
+Resources:
+  SeoulVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: "true"
+      EnableDnsHostnames: "true"
+      Tags:
+        - Key: Name
+          Value: SeoulVPC
+
+  SeoulIGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: SeoulIGW
+
+  SeoulIGWattachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref SeoulIGW
+      VpcId: !Ref SeoulVPC
+
+  SeoulPublic1Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SeoulVPC
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: 10.0.1.0/24
+      Tags:
+        - Key: Name
+          Value: SeoulPublic1Subnet
+
+  SeoulPublic2Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SeoulVPC
+      AvailabilityZone: !Select [ 2, !GetAZs '' ]
+      CidrBlock: 10.0.2.0/24
+      Tags:
+        - Key: Name
+          Value: SeoulPublic2Subnet
+
+  SeoulPublic1Routing:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SeoulVPC
+      Tags:
+        - Key: Name
+          Value: SeoulPublic1Routing
+
+  SeoulPublic2Routing:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SeoulVPC
+      Tags:
+        - Key: Name
+          Value: SeoulPublic2Routing
+
+  SeoulPublic1RoutingAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref SeoulPublic1Routing
+      SubnetId: !Ref SeoulPublic1Subnet
+
+  SeoulPublic2RoutingAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref SeoulPublic2Routing
+      SubnetId: !Ref SeoulPublic2Subnet
+
+  SeoulPublic1Default:
+    Type: AWS::EC2::Route
+    DependsOn: SeoulIGWattachment
+    Properties:
+      RouteTableId: !Ref SeoulPublic1Routing
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref SeoulIGW
+
+  SeoulPublic2Default:
+    Type: AWS::EC2::Route
+    DependsOn: SeoulIGWattachment
+    Properties:
+      RouteTableId: !Ref SeoulPublic2Routing
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref SeoulIGW
+
+  SeoulNatGW1EIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  SeoulNatGW2EIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  SeoulNatGW1:
+    Type: AWS::EC2::NatGateway
+    DependsOn: SeoulIGWattachment
+    Properties:
+      AllocationId: !GetAtt SeoulNatGW1EIP.AllocationId
+      SubnetId: !Ref SeoulPublic1Subnet
+
+  SeoulNatGW2:
+    Type: AWS::EC2::NatGateway
+    DependsOn: SeoulIGWattachment
+    Properties:
+      AllocationId: !GetAtt SeoulNatGW2EIP.AllocationId
+      SubnetId: !Ref SeoulPublic2Subnet
+
+  SeoulPrivate1Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SeoulVPC
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: 10.0.100.0/24
+      Tags:
+        - Key: Name
+          Value: SeoulPrivate1Subnet
+
+  SeoulPrivate2Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SeoulVPC
+      AvailabilityZone: !Select [ 2, !GetAZs '' ]
+      CidrBlock: 10.0.101.0/24
+      Tags:
+        - Key: Name
+          Value: SeoulPrivate2Subnet
+
+  SeoulPrivate1Routing:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SeoulVPC
+      Tags:
+        - Key: Name
+          Value: SeoulPrivate1Routing
+
+  SeoulPrivate2Routing:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SeoulVPC
+      Tags:
+        - Key: Name
+          Value: SeoulPrivate2Routing
+
+  SeoulPrivate1SubnetRoutingAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref SeoulPrivate1Routing
+      SubnetId: !Ref SeoulPrivate1Subnet
+
+  SeoulPrivate2SubnetRoutingAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref SeoulPrivate2Routing
+      SubnetId: !Ref SeoulPrivate2Subnet
+
+  SeoulPrivate1Default:
+    Type: AWS::EC2::Route
+    DependsOn: SeoulNatGW1
+    Properties:
+      RouteTableId: !Ref SeoulPrivate1Routing
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref SeoulNatGW1
+
+  SeoulPrivate2Default:
+    Type: AWS::EC2::Route
+    DependsOn: SeoulNatGW2
+    Properties:
+      RouteTableId: !Ref SeoulPrivate2Routing
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref SeoulNatGW2
+
+  SeoulPrivate1DBSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SeoulVPC
+      AvailabilityZone: !Select [ 0, !GetAZs '' ]
+      CidrBlock: 10.0.200.0/24
+      Tags:
+        - Key: Name
+          Value: SeoulPrivate1DBSubnet
+
+  SeoulPrivate2DBSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SeoulVPC
+      AvailabilityZone: !Select [ 2, !GetAZs '' ]
+      CidrBlock: 10.0.201.0/24
+      Tags:
+        - Key: Name
+          Value: SeoulPrivate2DBSubnet
+
+
+  SeoulSecuGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Permit HTTP(80), HTTPS(443) and SSH(22)
+      VpcId: !Ref SeoulVPC
+      GroupName: SeoulSecuGroup
+      Tags:
+        - Key: Name
+          Value: SeoulSecuGroup
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '80'
+        ToPort: '80'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: '443'
+        ToPort: '443'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: icmp
+        FromPort: '-1'
+        ToPort: '-1'
+        CidrIp: 0.0.0.0/0
+
+  SeoulALBtargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: SeoulALBtargetGroup
+      Port: 80
+      Protocol: HTTP
+      TargetType: instance
+      VpcId: !Ref SeoulVPC
+      Tags:
+        - Key: Name
+          Value: SeoulALBtargetGroup
+
+  SeoulALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn: SeoulALBtargetGroup
+    Properties:
+      Type: application
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref SeoulSecuGroup
+      Subnets:
+        - !Ref SeoulPublic1Subnet
+        - !Ref SeoulPublic2Subnet
+      Tags:
+        - Key: Name
+          Value: SeoulALB
+
+  SeoulALBlistener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    DependsOn: SeoulALBtargetGroup
+    Properties:
+      LoadBalancerArn: !Ref SeoulALB
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref SeoulALBtargetGroup
+
+  SeoulLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    DependsOn: SeoulSecuGroup
+    Properties:
+      LaunchTemplateName: SeoulLaunchTemplate
+      LaunchTemplateData: 
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+            - Key: Name
+              Value: SeoulLaunchTemplate
+        InstanceType: t3.micro
+        ImageId: !Ref LatestAmiId
+        KeyName: !Ref KeyName
+        NetworkInterfaces: 
+        - DeviceIndex: 0
+          Groups:
+            - !Ref SeoulSecuGroup
+          AssociatePublicIpAddress: false
+        UserData:
+          Fn::Base64:
+            !Sub |
+              #!/bin/bash
+              echo "toor1234." | passwd --stdin root 
+              sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/g' /etc/ssh/sshd_config
+              sed -i 's/^#PermitRootLogin prohibit-password/PermitRootLogin yes/g' /etc/ssh/sshd_config
+              systemctl restart sshd
+              yum install -y httpd
+              wget https://raw.githubusercontent.com/orrjaejun/aws/refs/heads/main/Seoul.html
+              mv Seoul.html /var/www/html/index.html
+              systemctl enable --now httpd.service
+
+  SeoulASGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn:
+      - SeoulLaunchTemplate
+      - SeoulNatGW1
+      - SeoulNatGW2
+    Properties:
+      AutoScalingGroupName: SeoulASGroup
+      VPCZoneIdentifier:
+        - !Ref SeoulPrivate1Subnet
+        - !Ref SeoulPrivate2Subnet
+      LaunchTemplate:
+        LaunchTemplateId: !Ref SeoulLaunchTemplate
+        Version: !GetAtt SeoulLaunchTemplate.LatestVersionNumber
+      TargetGroupARNs:
+        - !Ref SeoulALBtargetGroup
+      DesiredCapacity: 4
+      MaxSize: 8
+      MinSize: 4
+      Tags:
+        - Key: Name
+          Value: SeoulASGroup
+          PropagateAtLaunch: true
+#Daejeon
+  DaejeonVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 172.16.0.0/16
+      EnableDnsSupport: "true"
+      EnableDnsHostnames: "true"
+      Tags:
+        - Key: Name
+          Value: DaejeonVPC
+
+  DaejeonIGW:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: DaejeonIGW
+
+  DaejeonIGWattachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref DaejeonIGW
+      VpcId: !Ref DaejeonVPC
+
+  DaejeonPublic1Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref DaejeonVPC
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      CidrBlock: 172.16.1.0/24
+      Tags:
+        - Key: Name
+          Value: DaejeonPublic1Subnet
+
+  DaejeonPublic2Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref DaejeonVPC
+      AvailabilityZone: !Select [ 3, !GetAZs '' ]
+      CidrBlock: 172.16.2.0/24
+      Tags:
+        - Key: Name
+          Value: DaejeonPublic2Subnet
+
+  DaejeonPublic1Routing:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref DaejeonVPC
+      Tags:
+        - Key: Name
+          Value: DaejeonPublic1Routing
+
+  DaejeonPublic2Routing:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref DaejeonVPC
+      Tags:
+        - Key: Name
+          Value: DaejeonPublic2Routing
+
+  DaejeonPublic1RoutingAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref DaejeonPublic1Routing
+      SubnetId: !Ref DaejeonPublic1Subnet
+
+  DaejeonPublic2RoutingAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref DaejeonPublic2Routing
+      SubnetId: !Ref DaejeonPublic2Subnet
+
+  DaejeonPublic1Default:
+    Type: AWS::EC2::Route
+    DependsOn: DaejeonIGWattachment
+    Properties:
+      RouteTableId: !Ref DaejeonPublic1Routing
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref DaejeonIGW
+
+  DaejeonPublic2Default:
+    Type: AWS::EC2::Route
+    DependsOn: DaejeonIGWattachment
+    Properties:
+      RouteTableId: !Ref DaejeonPublic2Routing
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref DaejeonIGW
+
+  DaejeonNatGW1EIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  DaejeonNatGW2EIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  DaejeonNatGW1:
+    Type: AWS::EC2::NatGateway
+    DependsOn: DaejeonIGWattachment
+    Properties:
+      AllocationId: !GetAtt DaejeonNatGW1EIP.AllocationId
+      SubnetId: !Ref DaejeonPublic1Subnet
+
+  DaejeonNatGW2:
+    Type: AWS::EC2::NatGateway
+    DependsOn: DaejeonIGWattachment
+    Properties:
+      AllocationId: !GetAtt DaejeonNatGW2EIP.AllocationId
+      SubnetId: !Ref DaejeonPublic2Subnet
+
+  DaejeonPrivate1Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref DaejeonVPC
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      CidrBlock: 172.16.100.0/24
+      Tags:
+        - Key: Name
+          Value: DaejeonPrivate1Subnet
+
+  DaejeonPrivate2Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref DaejeonVPC
+      AvailabilityZone: !Select [ 3, !GetAZs '' ]
+      CidrBlock: 172.16.101.0/24
+      Tags:
+        - Key: Name
+          Value: DaejeonPrivate2Subnet
+
+  DaejeonPrivate1Routing:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref DaejeonVPC
+      Tags:
+        - Key: Name
+          Value: DaejeonPrivate1Routing
+
+  DaejeonPrivate2Routing:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref DaejeonVPC
+      Tags:
+        - Key: Name
+          Value: DaejeonPrivate2Routing
+
+  DaejeonPrivate1SubnetRoutingAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref DaejeonPrivate1Routing
+      SubnetId: !Ref DaejeonPrivate1Subnet
+
+  DaejeonPrivate2SubnetRoutingAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref DaejeonPrivate2Routing
+      SubnetId: !Ref DaejeonPrivate2Subnet
+
+  DaejeonPrivate1Default:
+    Type: AWS::EC2::Route
+    DependsOn: DaejeonNatGW1
+    Properties:
+      RouteTableId: !Ref DaejeonPrivate1Routing
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref DaejeonNatGW1
+
+  DaejeonPrivate2Default:
+    Type: AWS::EC2::Route
+    DependsOn: DaejeonNatGW2
+    Properties:
+      RouteTableId: !Ref DaejeonPrivate2Routing
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref DaejeonNatGW2
+
+  DaejeonPrivate1DBSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref DaejeonVPC
+      AvailabilityZone: !Select [ 1, !GetAZs '' ]
+      CidrBlock: 172.16.200.0/24
+      Tags:
+        - Key: Name
+          Value: DaejeonPrivate1DBSubnet
+
+  DaejeonPrivate2DBSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref DaejeonVPC
+      AvailabilityZone: !Select [ 3, !GetAZs '' ]
+      CidrBlock: 172.16.201.0/24
+      Tags:
+        - Key: Name
+          Value: DaejeonPrivate2DBSubnet
+
+
+  DaejeonSecuGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Permit HTTP(80), HTTPS(443) and SSH(22)
+      VpcId: !Ref DaejeonVPC
+      GroupName: DaejeonSecuGroup
+      Tags:
+        - Key: Name
+          Value: DaejeonSecuGroup
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '80'
+        ToPort: '80'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: '443'
+        ToPort: '443'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp: 0.0.0.0/0
+      - IpProtocol: icmp
+        FromPort: '-1'
+        ToPort: '-1'
+        CidrIp: 0.0.0.0/0
+
+  DaejeonALBtargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: DaejeonALBtargetGroup
+      Port: 80
+      Protocol: HTTP
+      TargetType: instance
+      VpcId: !Ref DaejeonVPC
+      Tags:
+        - Key: Name
+          Value: DaejeonALBtargetGroup
+
+  DaejeonALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn: DaejeonALBtargetGroup
+    Properties:
+      Type: application
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref DaejeonSecuGroup
+      Subnets:
+        - !Ref DaejeonPublic1Subnet
+        - !Ref DaejeonPublic2Subnet
+      Tags:
+        - Key: Name
+          Value: DaejeonALB
+
+  DaejeonALBlistener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    DependsOn: DaejeonALBtargetGroup
+    Properties:
+      LoadBalancerArn: !Ref DaejeonALB
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref DaejeonALBtargetGroup
+
+  DaejeonLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    DependsOn: DaejeonSecuGroup
+    Properties:
+      LaunchTemplateName: DaejeonLaunchTemplate
+      LaunchTemplateData: 
+        TagSpecifications:
+          - ResourceType: instance
+            Tags:
+            - Key: Name
+              Value: DaejeonLaunchTemplate
+        InstanceType: t3.micro
+        ImageId: !Ref LatestAmiId
+        KeyName: !Ref KeyName
+        NetworkInterfaces: 
+        - DeviceIndex: 0
+          Groups:
+            - !Ref DaejeonSecuGroup
+          AssociatePublicIpAddress: false
+        UserData:
+          Fn::Base64:
+            !Sub |
+              #!/bin/bash
+              echo "toor1234." | passwd --stdin root 
+              sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/g' /etc/ssh/sshd_config
+              sed -i 's/^#PermitRootLogin prohibit-password/PermitRootLogin yes/g' /etc/ssh/sshd_config
+              systemctl restart sshd
+              yum install -y httpd
+              wget https://raw.githubusercontent.com/orrjaejun/aws/refs/heads/main/Daejeon.html
+              mv Daejeon.html /var/www/html/index.html
+              systemctl enable --now httpd.service
+
+  DaejeonASGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    DependsOn:
+      - DaejeonLaunchTemplate
+      - DaejeonNatGW1
+      - DaejeonNatGW2
+    Properties:
+      AutoScalingGroupName: DaejeonASGroup
+      VPCZoneIdentifier:
+        - !Ref DaejeonPrivate1Subnet
+        - !Ref DaejeonPrivate2Subnet
+      LaunchTemplate:
+        LaunchTemplateId: !Ref DaejeonLaunchTemplate
+        Version: !GetAtt DaejeonLaunchTemplate.LatestVersionNumber
+      TargetGroupARNs:
+        - !Ref DaejeonALBtargetGroup
+      DesiredCapacity: 4
+      MaxSize: 8
+      MinSize: 4
+      Tags:
+        - Key: Name
+          Value: DaejeonASGroup
+          PropagateAtLaunch: true
+
+  MainTGW:
+    Type: "AWS::EC2::TransitGateway"
+    Properties:
+      Description: "Main TransitGateway"
+      Tags:
+        - Key: Name
+          Value: MainTGW
+
+
+  TGWSeoul:
+    DependsOn: MainTGW
+    Type: AWS::EC2::TransitGatewayAttachment
+    Properties:
+      Options: 
+        DnsSupport: "enable"
+      SubnetIds: 
+        - !Ref SeoulPrivate1Subnet
+        - !Ref SeoulPrivate2Subnet
+      TransitGatewayId: !Ref MainTGW
+      VpcId: !Ref SeoulVPC
+      Tags:
+        - Key: Name
+          Value: TGWSeoul
+
+  TGWDaejeon:
+    DependsOn: MainTGW
+    Type: AWS::EC2::TransitGatewayAttachment
+    Properties:
+      Options: 
+        DnsSupport: "enable"
+      SubnetIds: 
+        - !Ref DaejeonPrivate1Subnet
+        - !Ref DaejeonPrivate2Subnet
+      TransitGatewayId: !Ref MainTGW
+      VpcId: !Ref DaejeonVPC
+      Tags:
+        - Key: Name
+          Value: TGWDaejeon
+
+
+  TGWSeoulRTB:
+    DependsOn: MainTGW
+    Type: AWS::EC2::TransitGatewayRouteTable
+    Properties:
+      TransitGatewayId: !Ref MainTGW
+      Tags:
+        - Key: Name
+          Value: TGWSeoulRTB
+
+  TGWSeoulAssociation:
+    DependsOn: TGWSeoulRTB
+    Type: AWS::EC2::TransitGatewayRouteTableAssociation
+    Properties:
+      TransitGatewayAttachmentId: !Ref TGWSeoul
+      TransitGatewayRouteTableId: !Ref TGWSeoulRTB
+
+  TGWDaejeonRTB:
+    DependsOn: MainTGW
+    Type: AWS::EC2::TransitGatewayRouteTable
+    Properties:
+      TransitGatewayId: !Ref MainTGW
+      Tags:
+        - Key: Name
+          Value: TGWDaejeonRTB
+
+  TGWDaejeonAssociation:
+    DependsOn: TGWDaejeonRTB
+    Type: AWS::EC2::TransitGatewayRouteTableAssociation
+    Properties:
+      TransitGatewayAttachmentId: !Ref TGWDaejeon
+      TransitGatewayRouteTableId: !Ref TGWDaejeonRTB
+  
+  TGWDaejeonPropagation:
+    DependsOn: TGWDaejeonRTB
+    Type: AWS::EC2::TransitGatewayRouteTablePropagation
+    Properties:
+      TransitGatewayAttachmentId: !Ref TGWSeoul
+      TransitGatewayRouteTableId: !Ref TGWDaejeonRTB
+
+  SeoulToDaejeonRoutePri1:
+    Type: AWS::EC2::Route
+    DependsOn: TGWSeoul
+    Properties:
+       RouteTableId: !Ref SeoulPrivate1Routing
+       DestinationCidrBlock: 172.16.0.0/16
+       TransitGatewayAttachmentId: !Ref TGWSeoul
+
+
+  SeoulToDaejeonRoutePri2:
+    Type: AWS::EC2::Route
+    DependsOn: TGWSeoul
+    Properties:
+       RouteTableId: !Ref SeoulPrivate2Routing
+       DestinationCidrBlock: 172.16.0.0/16
+       TransitGatewayAttachmentId: !Ref TGWSeoul
+
+
+  DaejeontoSeoulRoutePri1:
+    Type: AWS::EC2::Route
+    DependsOn: TGWDaejeon
+    Properties:
+       RouteTableId: !Ref DaejeonPrivate1Routing
+       DestinationCidrBlock: 10.0.0.0/16
+       TransitGatewayAttachmentId: !Ref TGWDaejeon
+
+
+  DaejeontoSeoulRoutePri2:
+    Type: AWS::EC2::Route
+    DependsOn: TGWDaejeon
+    Properties:
+       RouteTableId: !Ref SeoulPrivate2Routing
+       DestinationCidrBlock: 10.0.0.0/16
+       TransitGatewayAttachmentId: !Ref TGWDaejeon
